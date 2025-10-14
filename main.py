@@ -1,11 +1,10 @@
 # 🎓 Waha School Chatbot (with PDF data)
 # Created by Fatima Al Naseri
-# Run using: streamlit run school_chatbot.py
+# Run using: streamlit run main.py
 
 import streamlit as st
 import PyPDF2
 import os
-# The correct import is here
 from deep_translator import GoogleTranslator
 
 # ------------------ PAGE SETUP ------------------
@@ -15,9 +14,9 @@ st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="c
 # ------------------ PDF READER ------------------
 def read_pdf(file_path):
     text = ""
+    # In Streamlit Cloud, the file path is just the name if it's in the root of the repo
     if not os.path.exists(file_path):
-        # NOTE: In Streamlit Cloud, the file path is just the name if it's in the root
-        return f"Error: PDF file '{file_path}' not found in the same folder."
+        return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
 
     try:
         with open(file_path, "rb") as f:
@@ -30,6 +29,7 @@ def read_pdf(file_path):
 
 
 # Load your school PDF here (assuming English data)
+# NOTE: Ensure 'school_data.pdf' is in the same folder as main.py in your GitHub repo
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
@@ -60,18 +60,14 @@ else:
 # ------------------ FIND ANSWER (CORRECTED FOR DEEP-TRANSLATOR) ------------------
 def find_answer(question, text):
     try:
-        # 1. Use an Auto-detect translator for the user's question (target is English for search)
-        # We initialize the translator *inside* the function for thread safety and simplicity
+        # 1. Initialize translator for input: Auto-detect source, target English (for PDF search)
         input_translator = GoogleTranslator(source='auto', target='en')
         
-        # 2. Get the English question for searching the PDF
+        # 2. Translate the question to English
         search_question = input_translator.translate(text=question)
 
-        # 3. Determine the original language for translating the answer back
-        # NOTE: deep-translator doesn't expose the detected language easily, 
-        # so we will assume the user meant to ask in Arabic if the toggle is set to Arabic,
-        # otherwise we assume English. This is simpler and more reliable than auto-detecting.
-        original_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
+        # 3. Determine the final answer language based on the Streamlit toggle
+        target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
         # --- CHATBOT SEARCH LOGIC ---
@@ -89,10 +85,10 @@ def find_answer(question, text):
                 break
 
         if found_sentence_en:
-            # 4. Translate the found English answer back to the original question language
-            if original_lang_code != 'en':
-                # Translate back to the user's language (Arabic)
-                output_translator = GoogleTranslator(source='en', target=original_lang_code)
+            # 4. Translate the found English answer back to the user's language
+            if target_lang_code != 'en':
+                # Initialize translator for output: source English, target user's language
+                output_translator = GoogleTranslator(source='en', target=target_lang_code)
                 final_answer = output_translator.translate(text=found_sentence_en)
             else:
                 final_answer = found_sentence_en
@@ -102,7 +98,7 @@ def find_answer(question, text):
         return None  # No answer found
 
     except Exception as e:
-        # This will catch and display the error
+        # This will catch and display the translation error
         st.warning(f"Translation Error: {e}")
         return None
 
@@ -127,6 +123,7 @@ if submit_button and user_input:
 
     # Handle case where no answer is found OR a translation error occurs
     if not answer:
+        # If the answer is None (due to no match or error), provide a fallback message
         if st.session_state.language == "English":
             answer = "I'm sorry, I couldn't find that in the school information."
         else:
