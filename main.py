@@ -143,4 +143,6 @@ for sender, msg in st.session_state.messages[::-1]:
 
 # ------------------ FOOTER ------------------
 
-st.markdown("<hr><center>© 2025 Waha School Chatbot
+
+st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
+
