@@ -1,48 +1,42 @@
-# 🎓 Waha School Chatbot (FINAL CODE - Uses Column Indices 0 & 1)
+# 🎓 Waha School Chatbot (with PDF data)
 # Created by Fatima Al Naseri
 # Run using: streamlit run main.py
 
 import streamlit as st
-import pandas as pd
+import PyPDF2
+import os
 from deep_translator import GoogleTranslator
-import re
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
 
 
-# ------------------ CSV READER (FINAL ADAPTATION) ------------------
-@st.cache_data
-def load_data(file_path="school_data.csv"):
-    """
-    Loads the school data from a CSV file assuming the key is in column 0
-    and the value is in column 1 (no header row).
-    """
+# ------------------ PDF READER ------------------
+def read_pdf(file_path):
+    text = ""
+    # In Streamlit Cloud, the file path is just the name if it's in the root of the repo
+    # *** IMPORTANT: Change the file name here if you renamed your PDF to fix caching! ***
+    if not os.path.exists(file_path):
+        return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
+
     try:
-        # Load the CSV file without treating the first row as headers
-        data_frame = pd.read_csv(file_path, header=None).fillna('')
-        
-        # We check for column indices 0 and 1
-        required_cols = [0, 1]
-        if not all(col in data_frame.columns for col in required_cols):
-             # This error happens if the file isn't a two-column CSV
-             st.error(f"Error: CSV file must contain at least two columns with data. Check file structure.")
-             st.stop()
-        
-        # Create a lowercase version of the Key/Role column (Column 0) for searching
-        data_frame['Key_lower'] = data_frame[0].str.lower()
-        
-        return data_frame
-    except FileNotFoundError:
-        st.error(f"Error: CSV file '{file_path}' not found. Make sure it's uploaded to GitHub.")
-        st.stop()
+        with open(file_path, "rb") as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+        return text
     except Exception as e:
-        st.error(f"Error loading CSV data: {str(e)}")
-        st.stop()
+        return f"Error reading PDF: {str(e)}"
 
-# Load the data once at the start
-school_data_df = load_data()
 
+# Load your school PDF here
+# *** IMPORTANT: Use the correct, clean PDF file name here ***
+pdf_data = read_pdf("school_data.pdf")
+
+# Check if the PDF loaded successfully
+if "Error" in pdf_data and pdf_data.startswith("Error:"):
+    st.error(pdf_data)
+    st.stop()
 
 # ------------------ PAGE HEADER ------------------
 col1, col2 = st.columns([9, 1])
@@ -64,71 +58,53 @@ else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
 
 
-# ------------------ FIND ANSWER (ADAPTED CSV LOGIC) ------------------
-def find_answer(question, df):
-    """Searches the DataFrame by matching keywords in the user question to the 'Key' column (Column 0)."""
+# ------------------ FIND ANSWER (FINAL, VERIFIED TRANSLATION LOGIC) ------------------
+def find_answer(question, text):
     try:
-        # 1. Translate the input question to English for robust searching
+        # 1. Translate the input question to English for searching the PDF
         input_translator = GoogleTranslator(source='auto', target='en')
-        search_question_en = input_translator.translate(text=question).lower()
+        search_question = input_translator.translate(text=question)
 
-        # 2. Determine the final answer language
+        # 2. Determine the final answer language based on the Streamlit toggle
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
-        
-        # --- CHATBOT SEARCH LOGIC: Match by Keywords ---
-        
-        # List of expected keywords (expanded to cover your roles)
-        keywords = ["principal", "social worker", "grade 10", "grade 11", "grade 12", "phone number", "phone"]
-        
-        # Identify relevant keywords present in the user's question
-        matching_keywords = [k for k in keywords if k in search_question_en]
-        
-        results = pd.DataFrame()
 
-        if matching_keywords:
-            # Create a flexible regex pattern to match multiple keywords in the Key column
-            pattern = '|'.join(re.escape(k) for k in matching_keywords)
-            
-            # Filter the DataFrame: Find rows where the Key_lower column contains one of the matching keywords
-            results = df[df['Key_lower'].str.contains(pattern, case=False, na=False)]
-        
-        if not results.empty:
-            response_parts = []
-            
-            # Format the answer based on the Key (Column 0) and Value (Column 1)
-            for index, row in results.iterrows():
-                key = row[0] # Key/Role (e.g., "School principle name")
-                value = row[1] # Value (e.g., "Fatima al naseri")
-                
-                # Use a specific phrase for staff members
-                if "social worker" in key.lower() or "principle" in key.lower():
-                    response_parts.append(f"{key} is: {value}.")
-                # Use a specific phrase for phone numbers/details
-                elif "phone number" in key.lower() or "phone" in key.lower():
-                    response_parts.append(f"The {key} is: {value}.")
-                else:
-                    # General fact
-                    response_parts.append(f"{key}: {value}.")
-                     
-            found_answer_en = "\n".join(response_parts)
-            
+
+        # --- CHATBOT SEARCH LOGIC ---
+        search_question = search_question.lower()
+        # Split text into sentences using '. ' as the delimiter
+        sentences = text.replace('\n', ' ').replace('\r', '').split(". ")
+
+        # Simplified keyword extraction
+        stop_words = ["what", "is", "the", "are", "of", "a", "an", "how", "when", "where", "me", "about", "tell", "who", "for", "i'm", "i", "do", "you"]
+        keywords = [word for word in search_question.split() if word not in stop_words and len(word) > 2]
+
+        # Simple matching: Return the first English sentence that contains one or more English keywords
+        found_sentence_en = None
+        for sentence in sentences:
+            if any(keyword in sentence.lower() for keyword in keywords):
+                # Ensure the sentence ends with a period before proceeding
+                found_sentence_en = sentence.strip() + "."
+                break
+
+        if found_sentence_en:
             # 3. Translate the found English answer back to the user's language
             if target_lang_code != 'en':
+                # Initialize translator for output: source English, target user's language
                 output_translator = GoogleTranslator(source='en', target=target_lang_code)
-                final_answer = output_translator.translate(text=found_answer_en)
+                final_answer = output_translator.translate(text=found_sentence_en)
             else:
-                final_answer = found_answer_en
+                final_answer = found_sentence_en
 
             return final_answer
 
-        return None # No answer found
+        return None  # No answer found
 
     except Exception as e:
-        # Provide a language-appropriate error message
+        # If translation fails, provide a language-appropriate error message
         if st.session_state.language == 'العربية':
-            return "عذراً، حدث خطأ في معالجة البيانات. يرجى مراجعة ملف CSV."
+            return "عذراً، حدث خطأ في الترجمة. يرجى المحاولة مرة أخرى."
         else:
-            return f"Data Processing Error: Could not process the request. ({str(e)})"
+            return f"Translation Error: Could not process the request."
 
 
 # ------------------ CHAT ------------------
@@ -148,22 +124,21 @@ with st.form(key='chat_form', clear_on_submit=True):
     user_input = st.text_input(
         input_prompt, 
         key="user_query_input",
-        placeholder="e.g., Who is the Grade 10 Social Worker?" if st.session_state.language == "English" else "مثل: من هي الأخصائية الاجتماعية للصف العاشر؟"
+        placeholder="e.g., What are the school hours?" if st.session_state.language == "English" else "مثل: ما هي ساعات الدوام المدرسي؟"
     )
 
-    # Use a single button label for clarity
-    submit_button = st.form_submit_button(label=f'{send_label}') 
+    submit_button = st.form_submit_button(label=f'{send_label} / {send_label}') 
 
 if submit_button and user_input:
     # --- FIND ANSWER LOGIC ---
-    answer = find_answer(user_input, school_data_df) # Call the function with the DataFrame
+    answer = find_answer(user_input, pdf_data)
 
-    # Handle case where no answer is found OR a data/translation error occurs
-    if not answer or answer.startswith("عذراً، حدث خطأ") or answer.startswith("Data Processing Error"):
+    # Handle case where no answer is found OR a translation error occurs
+    if not answer or answer.startswith("عذراً، حدث خطأ") or answer.startswith("Translation Error"):
         if st.session_state.language == "English":
-            answer = "I'm sorry, I couldn't find that specific information in the school data."
+            answer = "I'm sorry, I couldn't find that in the school information."
         else:
-            answer = "عذراً، لم أجد هذه المعلومة المحددة في بيانات المدرسة."
+            answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
 
     # --- SAVE TO HISTORY ---
     # Insert the newest interaction to the front of the list
