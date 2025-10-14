@@ -5,10 +5,10 @@
 import streamlit as st
 import PyPDF2
 import os
-from deep_translator import ''GoogleTranslator''
+from deep_translator import GoogleTranslator
 
 # Initialize Translator outside of functions for efficiency
-translator = ''GoogleTranslator''
+translator = GoogleTranslator
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
@@ -140,6 +140,7 @@ for sender, msg in st.session_state.messages:
 # ------------------ FOOTER ------------------
 
 st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
+
 
 
 
