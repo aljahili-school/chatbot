@@ -105,15 +105,25 @@ def find_answer(question, text):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# --- FIX: Dynamic Prompt Variable ---
+if st.session_state.language == "English":
+    input_prompt = "Ask me something about the school:"
+    send_label = 'Send'
+else:
+    input_prompt = "اسألني عن المدرسة:"
+    send_label = 'إرسال'
+# --- END FIX ---
+
 # Input and Submission are placed inside a form to clear the input field after submission
 with st.form(key='chat_form', clear_on_submit=True):
     user_input = st.text_input(
-        "Ask me something about the school / اسألني عن المدرسة:",
+        input_prompt, # Use the dynamic variable here for the label
         key="user_query_input",
         placeholder="e.g., What are the school hours?" if st.session_state.language == "English" else "مثل: ما هي ساعات الدوام المدرسي؟"
     )
 
-    submit_button = st.form_submit_button(label='Send / إرسال')
+    # Use the dynamic variable for the button label
+    submit_button = st.form_submit_button(label=f'{send_label} / {send_label}') 
 
 if submit_button and user_input:
     # --- FIND ANSWER LOGIC ---
@@ -127,8 +137,7 @@ if submit_button and user_input:
             answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
 
     # --- SAVE TO HISTORY (FIXED ORDER: Question then Answer, Newest at Top) ---
-    # Append the question and answer pair as a list to the front of the messages list
-    # This places the newest interaction at the top of the chat history.
+    # Insert the newest interaction to the front of the list for "newest at top" display
     st.session_state.messages.insert(0, ("🤖 Waha", answer))
     st.session_state.messages.insert(0, ("🧍‍♀️ You", user_input))
 
@@ -143,5 +152,4 @@ for sender, msg in st.session_state.messages:
 
 # ------------------ FOOTER ------------------
 
-# FIX: Ensure this line is correctly formatted to avoid the SyntaxError
-st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
+st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Al Jahili School </center>", unsafe_allow_html=True)
