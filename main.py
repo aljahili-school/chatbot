@@ -67,7 +67,7 @@ def find_answer(question, text):
         search_question = input_translator.translate(text=question)
 
         # 3. Determine the final answer language based on the Streamlit toggle
-        # This reliably uses the user's selected language
+        # This is the key fix to return the answer in the user's selected language
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
@@ -105,42 +105,4 @@ def find_answer(question, text):
 
 
 # ------------------ CHAT ------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Input and Submission are placed inside a form to clear the input field after submission
-with st.form(key='chat_form', clear_on_submit=True):
-    user_input = st.text_input(
-        "Ask me something about the school / اسألني عن المدرسة:",
-        key="user_query_input",
-        placeholder="e.g., What are the school hours?" if st.session_state.language == "English" else "مثل: ما هي ساعات الدوام المدرسي؟"
-    )
-
-    submit_button = st.form_submit_button(label='Send / إرسال')
-
-if submit_button and user_input:
-    # --- FIND ANSWER LOGIC ---
-    answer = find_answer(user_input, pdf_data)
-
-    # Handle case where no answer is found OR a translation error occurs
-    if not answer:
-        # If the answer is None (due to no match or error), provide a fallback message
-        if st.session_state.language == "English":
-            answer = "I'm sorry, I couldn't find that in the school information."
-        else:
-            answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
-
-    # --- SAVE TO HISTORY ---
-    st.session_state.messages.append(("🧍‍♀️ You", user_input))
-    st.session_state.messages.append(("🤖 Waha", answer))
-
-# ------------------ DISPLAY ------------------
-for sender, msg in st.session_state.messages:
-    color = "#eaf2fd" if sender == "🧍‍♀️ You" else "#f0f0f0"
-    st.markdown(
-        f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word;'><b>{sender}:</b> {msg}</div>",
-        unsafe_allow_html=True)
-
-# ------------------ FOOTER ------------------
-
-st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
+if "messages" not in st.session_state
