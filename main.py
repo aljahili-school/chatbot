@@ -67,7 +67,6 @@ def find_answer(question, text):
         search_question = input_translator.translate(text=question)
 
         # 3. Determine the final answer language based on the Streamlit toggle
-        # This is the key fix to return the answer in the user's selected language
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
@@ -135,7 +134,8 @@ if submit_button and user_input:
     st.session_state.messages.append(("🤖 Waha", answer))
 
 # ------------------ DISPLAY ------------------
-for sender, msg in st.session_state.messages:
+# FIX: Use [::-1] to reverse the list so the newest messages appear at the top.
+for sender, msg in st.session_state.messages[::-1]: 
     color = "#eaf2fd" if sender == "🧍‍♀️ You" else "#f0f0f0"
     st.markdown(
         f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word;'><b>{sender}:</b> {msg}</div>",
@@ -143,4 +143,4 @@ for sender, msg in st.session_state.messages:
 
 # ------------------ FOOTER ------------------
 
-st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
+st.markdown("<hr><center>© 2025 Waha School Chatbot
