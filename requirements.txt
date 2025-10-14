@@ -1,3 +1,9 @@
 streamlit
 PyPDF2
+
 googletrans==4.0.0-rc1
+
+streamlit
+pandas
+# ... any other libraries you use
+googletrans==3.1.0a0
