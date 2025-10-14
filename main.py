@@ -1,27 +1,35 @@
-# 🎓 Waha School Chatbot (with CSV data)
+# 🎓 Waha School Chatbot (Adapted for User's Key-Value CSV structure)
 # Created by Fatima Al Naseri
 # Run using: streamlit run main.py
 
 import streamlit as st
-import pandas as pd             # <-- NEW: For reading the CSV file
+import pandas as pd
 from deep_translator import GoogleTranslator
-import re                       # For slightly more advanced text matching
+import re
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
 
 
-# ------------------ CSV READER ------------------
+# ------------------ CSV READER (ADAPTED) ------------------
 def load_data(file_path="school_data.csv"):
-    """Loads the school data from a CSV file into a pandas DataFrame."""
+    """
+    Loads the school data from a CSV file assuming the key is in column 0
+    and the value is in column 1 (no header row).
+    """
     try:
-        # Load the CSV file. Replace any NaN (missing) values with an empty string for safety.
-        data_frame = pd.read_csv(file_path).fillna('')
+        # Load the CSV file without treating the first row as headers
+        data_frame = pd.read_csv(file_path, header=None).fillna('')
         
-        # Ensure the essential columns exist
-        required_cols = ['Role', 'Name', 'Contact Detail']
+        # We rename the columns to what they represent in your file
+        # Column 0 is the Role/Key (e.g., "School principle name")
+        # Column 1 is the Value (e.g., "Fatima al naseri" or "03 766 5000")
+        data_frame.rename(columns={0: 'Role', 1: 'Value'}, inplace=True)
+        
+        # Ensure the essential columns exist (now just 'Role' and 'Value')
+        required_cols = ['Role', 'Value']
         if not all(col in data_frame.columns for col in required_cols):
-             st.error(f"Error: CSV file must contain columns: {', '.join(required_cols)}")
+             st.error(f"Error: CSV file must contain at least two columns with data.")
              st.stop()
         
         # Convert all relevant text columns to lowercase for case-insensitive searching later
@@ -59,48 +67,51 @@ else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
 
 
-# ------------------ FIND ANSWER (NEW CSV LOGIC) ------------------
+# ------------------ FIND ANSWER (ADAPTED CSV LOGIC) ------------------
 def find_answer(question, df):
-    """Searches the DataFrame for keywords matching the user's question."""
+    """Searches the DataFrame by matching keywords in the user question to the 'Role' column."""
     try:
-        # 1. Translate the input question to English for searching the data
+        # 1. Translate the input question to English for robust searching
         input_translator = GoogleTranslator(source='auto', target='en')
         search_question_en = input_translator.translate(text=question).lower()
 
         # 2. Determine the final answer language
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
         
-        # --- CHATBOT SEARCH LOGIC: Match by Keyword in the 'Role_lower' column ---
+        # --- CHATBOT SEARCH LOGIC: Match by Keywords ---
         
-        # List of expected keywords (can be expanded)
-        keywords = ["principal", "social worker", "hours", "phone", "email", "grade 10", "grade 12"]
+        # List of expected keywords (expanded to cover your roles)
+        keywords = ["principal", "social worker", "grade 10", "grade 11", "grade 12", "phone number", "phone"]
         
-        # Look for a specific keyword from the question that is in the Role column
-        # Using a regex word boundary (\b) for better matching (e.g., matching "phone" but not "telephone")
+        # Identify relevant keywords present in the user's question
+        matching_keywords = [k for k in keywords if k in search_question_en]
         
-        # Combine keywords to form a regex search pattern
-        pattern = r'\b(' + '|'.join(re.escape(k) for k in keywords) + r')\b'
-        
-        # Filter the DataFrame: Find rows where the Role column contains one of the keywords
-        results = df[df['Role_lower'].str.contains(pattern, case=False, na=False)]
+        results = pd.DataFrame()
+
+        if matching_keywords:
+            # Create a flexible regex pattern to match multiple keywords in the Role
+            pattern = '|'.join(re.escape(k) for k in matching_keywords)
+            
+            # Filter the DataFrame: Find rows where the Role column contains one of the matching keywords
+            results = df[df['Role_lower'].str.contains(pattern, case=False, na=False)]
         
         if not results.empty:
             response_parts = []
             
-            # Use the first English row for translation base
+            # Format the answer based on the Role and Value
             for index, row in results.iterrows():
                 role = row['Role']
-                name = row['Name']
-                detail = row['Contact Detail']
-                contact_type = row['Contact Type'] if 'Contact Type' in row.index else ''
+                value = row['Value']
                 
-                # Format the structured English response
-                if detail:
-                    # Generic staff/info response
-                    response_parts.append(f"{role} is: {name}. The contact detail is {detail} ({contact_type}).")
+                # Use a specific phrase for staff members
+                if "social worker" in role.lower() or "principal" in role.lower():
+                    response_parts.append(f"{role} is: {value}.")
+                # Use a specific phrase for phone numbers/details
+                elif "phone number" in role.lower():
+                    response_parts.append(f"The {role} is: {value}.")
                 else:
-                    # If contact detail is missing
-                     response_parts.append(f"{role} is: {name}.")
+                    # General fact
+                    response_parts.append(f"{role}: {value}.")
                      
             found_answer_en = "\n".join(response_parts)
             
