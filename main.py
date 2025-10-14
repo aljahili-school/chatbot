@@ -5,10 +5,8 @@
 import streamlit as st
 import PyPDF2
 import os
+# The correct import is here
 from deep_translator import GoogleTranslator
-
-# Initialize Translator outside of functions for efficiency
-translator = GoogleTranslator
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
@@ -18,6 +16,7 @@ st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="c
 def read_pdf(file_path):
     text = ""
     if not os.path.exists(file_path):
+        # NOTE: In Streamlit Cloud, the file path is just the name if it's in the root
         return f"Error: PDF file '{file_path}' not found in the same folder."
 
     try:
@@ -58,19 +57,24 @@ else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
 
 
-# ------------------ FIND ANSWER (MODIFIED FOR TRANSLATION) ------------------
+# ------------------ FIND ANSWER (CORRECTED FOR DEEP-TRANSLATOR) ------------------
 def find_answer(question, text):
     try:
-        # 1. Detect language of the question
-        detected_lang = translator.detect(question).lang
+        # 1. Use an Auto-detect translator for the user's question (target is English for search)
+        # We initialize the translator *inside* the function for thread safety and simplicity
+        input_translator = GoogleTranslator(source='auto', target='en')
+        
+        # 2. Get the English question for searching the PDF
+        search_question = input_translator.translate(text=question)
 
-        # 2. Translate question to English if needed (assuming PDF data is English)
-        if detected_lang != 'en':
-            # Translate to English for searching the English PDF data
-            search_question = translator.translate(question, dest='en').text
-        else:
-            search_question = question
+        # 3. Determine the original language for translating the answer back
+        # NOTE: deep-translator doesn't expose the detected language easily, 
+        # so we will assume the user meant to ask in Arabic if the toggle is set to Arabic,
+        # otherwise we assume English. This is simpler and more reliable than auto-detecting.
+        original_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
+
+        # --- CHATBOT SEARCH LOGIC ---
         search_question = search_question.lower()
         sentences = text.replace('\n', ' ').replace('\r', '').split(". ")
 
@@ -85,10 +89,11 @@ def find_answer(question, text):
                 break
 
         if found_sentence_en:
-            # 3. Translate the found English answer back to the original question language
-            if detected_lang != 'en':
-                # Translate back to the user's language (e.g., Arabic)
-                final_answer = translator.translate(found_sentence_en, dest=detected_lang).text
+            # 4. Translate the found English answer back to the original question language
+            if original_lang_code != 'en':
+                # Translate back to the user's language (Arabic)
+                output_translator = GoogleTranslator(source='en', target=original_lang_code)
+                final_answer = output_translator.translate(text=found_sentence_en)
             else:
                 final_answer = found_sentence_en
 
@@ -97,6 +102,7 @@ def find_answer(question, text):
         return None  # No answer found
 
     except Exception as e:
+        # This will catch and display the error
         st.warning(f"Translation Error: {e}")
         return None
 
@@ -140,7 +146,3 @@ for sender, msg in st.session_state.messages:
 # ------------------ FOOTER ------------------
 
 st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
-
-
-
-
