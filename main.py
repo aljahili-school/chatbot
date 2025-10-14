@@ -1,4 +1,4 @@
-# 🎓 Waha School Chatbot (Adapted for User's Key-Value CSV structure)
+# 🎓 Waha School Chatbot (FINAL CODE - Uses Column Indices 0 & 1)
 # Created by Fatima Al Naseri
 # Run using: streamlit run main.py
 
@@ -11,7 +11,8 @@ import re
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
 
 
-# ------------------ CSV READER (ADAPTED) ------------------
+# ------------------ CSV READER (FINAL ADAPTATION) ------------------
+@st.cache_data
 def load_data(file_path="school_data.csv"):
     """
     Loads the school data from a CSV file assuming the key is in column 0
@@ -21,19 +22,15 @@ def load_data(file_path="school_data.csv"):
         # Load the CSV file without treating the first row as headers
         data_frame = pd.read_csv(file_path, header=None).fillna('')
         
-        # We rename the columns to what they represent in your file
-        # Column 0 is the Role/Key (e.g., "School principle name")
-        # Column 1 is the Value (e.g., "Fatima al naseri" or "03 766 5000")
-        data_frame.rename(columns={0: 'Role', 1: 'Value'}, inplace=True)
-        
-        # Ensure the essential columns exist (now just 'Role' and 'Value')
-        required_cols = ['Role', 'Value']
+        # We check for column indices 0 and 1
+        required_cols = [0, 1]
         if not all(col in data_frame.columns for col in required_cols):
-             st.error(f"Error: CSV file must contain at least two columns with data.")
+             # This error happens if the file isn't a two-column CSV
+             st.error(f"Error: CSV file must contain at least two columns with data. Check file structure.")
              st.stop()
         
-        # Convert all relevant text columns to lowercase for case-insensitive searching later
-        data_frame['Role_lower'] = data_frame['Role'].str.lower()
+        # Create a lowercase version of the Key/Role column (Column 0) for searching
+        data_frame['Key_lower'] = data_frame[0].str.lower()
         
         return data_frame
     except FileNotFoundError:
@@ -69,7 +66,7 @@ else:
 
 # ------------------ FIND ANSWER (ADAPTED CSV LOGIC) ------------------
 def find_answer(question, df):
-    """Searches the DataFrame by matching keywords in the user question to the 'Role' column."""
+    """Searches the DataFrame by matching keywords in the user question to the 'Key' column (Column 0)."""
     try:
         # 1. Translate the input question to English for robust searching
         input_translator = GoogleTranslator(source='auto', target='en')
@@ -89,29 +86,29 @@ def find_answer(question, df):
         results = pd.DataFrame()
 
         if matching_keywords:
-            # Create a flexible regex pattern to match multiple keywords in the Role
+            # Create a flexible regex pattern to match multiple keywords in the Key column
             pattern = '|'.join(re.escape(k) for k in matching_keywords)
             
-            # Filter the DataFrame: Find rows where the Role column contains one of the matching keywords
-            results = df[df['Role_lower'].str.contains(pattern, case=False, na=False)]
+            # Filter the DataFrame: Find rows where the Key_lower column contains one of the matching keywords
+            results = df[df['Key_lower'].str.contains(pattern, case=False, na=False)]
         
         if not results.empty:
             response_parts = []
             
-            # Format the answer based on the Role and Value
+            # Format the answer based on the Key (Column 0) and Value (Column 1)
             for index, row in results.iterrows():
-                role = row['Role']
-                value = row['Value']
+                key = row[0] # Key/Role (e.g., "School principle name")
+                value = row[1] # Value (e.g., "Fatima al naseri")
                 
                 # Use a specific phrase for staff members
-                if "social worker" in role.lower() or "principal" in role.lower():
-                    response_parts.append(f"{role} is: {value}.")
+                if "social worker" in key.lower() or "principle" in key.lower():
+                    response_parts.append(f"{key} is: {value}.")
                 # Use a specific phrase for phone numbers/details
-                elif "phone number" in role.lower():
-                    response_parts.append(f"The {role} is: {value}.")
+                elif "phone number" in key.lower() or "phone" in key.lower():
+                    response_parts.append(f"The {key} is: {value}.")
                 else:
                     # General fact
-                    response_parts.append(f"{role}: {value}.")
+                    response_parts.append(f"{key}: {value}.")
                      
             found_answer_en = "\n".join(response_parts)
             
@@ -124,7 +121,7 @@ def find_answer(question, df):
 
             return final_answer
 
-        return None  # No answer found
+        return None # No answer found
 
     except Exception as e:
         # Provide a language-appropriate error message
