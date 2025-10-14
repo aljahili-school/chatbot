@@ -67,6 +67,7 @@ def find_answer(question, text):
         search_question = input_translator.translate(text=question)
 
         # 3. Determine the final answer language based on the Streamlit toggle
+        # This reliably uses the user's selected language
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
