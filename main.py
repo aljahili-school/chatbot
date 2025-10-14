@@ -29,7 +29,6 @@ def read_pdf(file_path):
 
 
 # Load your school PDF here (assuming English data)
-# NOTE: Ensure 'school_data.pdf' is in the same folder as main.py in your GitHub repo
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
@@ -98,7 +97,6 @@ def find_answer(question, text):
         return None  # No answer found
 
     except Exception as e:
-        # This will catch and display the translation error
         st.warning(f"Translation Error: {e}")
         return None
 
@@ -123,19 +121,21 @@ if submit_button and user_input:
 
     # Handle case where no answer is found OR a translation error occurs
     if not answer:
-        # If the answer is None (due to no match or error), provide a fallback message
         if st.session_state.language == "English":
             answer = "I'm sorry, I couldn't find that in the school information."
         else:
             answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
 
-    # --- SAVE TO HISTORY ---
-    st.session_state.messages.append(("🧍‍♀️ You", user_input))
-    st.session_state.messages.append(("🤖 Waha", answer))
+    # --- SAVE TO HISTORY (FIXED ORDER: Question then Answer, Newest at Top) ---
+    # Append the question and answer pair as a list to the front of the messages list
+    # This places the newest interaction at the top of the chat history.
+    st.session_state.messages.insert(0, ("🤖 Waha", answer))
+    st.session_state.messages.insert(0, ("🧍‍♀️ You", user_input))
+
 
 # ------------------ DISPLAY ------------------
-# FIX: Use [::-1] to reverse the list so the newest messages appear at the top.
-for sender, msg in st.session_state.messages[::-1]: 
+# Display messages in the order they were inserted (newest at the top)
+for sender, msg in st.session_state.messages: 
     color = "#eaf2fd" if sender == "🧍‍♀️ You" else "#f0f0f0"
     st.markdown(
         f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word;'><b>{sender}:</b> {msg}</div>",
@@ -143,6 +143,5 @@ for sender, msg in st.session_state.messages[::-1]:
 
 # ------------------ FOOTER ------------------
 
-
+# FIX: Ensure this line is correctly formatted to avoid the SyntaxError
 st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
-
