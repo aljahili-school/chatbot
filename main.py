@@ -44,7 +44,7 @@ with col1:
 
 # Language toggle logic
 if "language" not in st.session_state:
-    st.session_state.language = "English"
+    st.session_state.language = "العربية" # <--- CHANGED DEFAULT LANGUAGE TO ARABIC
 
 with col2:
     # Button to switch UI language
