@@ -1,7 +1,3 @@
 streamlit
 PyPDF2
-deep-translator  # New library to use for translation
-pandas
-python-dotenv
-
-openai
+deep-translator
