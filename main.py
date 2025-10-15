@@ -1,5 +1,4 @@
-# 🎓 Waha School Chatbot (with Arabic PDF data)
-# Created by Fatima Al Naseri
+# 🎓 Waha School Chatbot (Arabic Data, Final)
 # Run using: streamlit run main.py
 
 import streamlit as st
@@ -22,6 +21,7 @@ def read_pdf(file_path):
         with open(file_path, "rb") as f:
             reader = PyPDF2.PdfReader(f)
             for page in reader.pages:
+                # PyPDF2 extracts raw text, which needs careful handling for Arabic.
                 text += page.extract_text() + "\n"
         return text
     except Exception as e:
@@ -29,7 +29,7 @@ def read_pdf(file_path):
 
 
 # Load your school PDF here
-# *** NOTE: The file 'school_data.pdf' MUST now contain Arabic content. ***
+# *** NOTE: The file 'school_data.pdf' is now assumed to contain ARABIC content. ***
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
@@ -60,7 +60,7 @@ else:
     user_lang_is_arabic = True
 
 
-# ------------------ FIND ANSWER (FIXED SENTENCE SPLITTING) ------------------
+# ------------------ FIND ANSWER (SEARCHES ARABIC PDF) ------------------
 def find_answer(question, text, user_is_arabic):
     try:
         
@@ -74,11 +74,12 @@ def find_answer(question, text, user_is_arabic):
         
         
         # --- CHATBOT SEARCH LOGIC: SCORING (against Arabic PDF text) ---
-        # FIXED SENTENCE SPLITTING: Use the period/full stop (.) as the reliable sentence separator
-        # This prevents PyPDF2's poor Arabic text extraction from causing everything to be one block.
+        # FIXED: Use the period/full stop (.) as the reliable sentence separator for Arabic text
+        # This handles the PyPDF2 text extraction issue.
         sentences = text.replace('\n', ' ').replace('\r', '').split(".") 
 
         # Prepare keywords: minimal filtering for robustness in Arabic
+        # We only filter words that are empty or very short after splitting
         keywords = [word for word in search_query_ar.split() if len(word) > 1]
 
         best_score = -1
@@ -87,7 +88,6 @@ def find_answer(question, text, user_is_arabic):
         # Iterate through all sentences to find the one with the highest keyword overlap (score)
         for sentence in sentences:
             sentence_lower = sentence.lower()
-            # Handle the case where the text might contain lines that don't end in a period
             # We look for the keyword overlap score
             current_score = sum(1 for keyword in keywords if keyword in sentence_lower)
             
@@ -107,7 +107,7 @@ def find_answer(question, text, user_is_arabic):
                 final_answer = translator_ar_to_en.translate(text=found_sentence_ar)
             
             # Simple check to ensure punctuation
-            if final_answer and not final_answer.strip().endswith(('.', '?', '!')):
+            if final_answer and not final_answer.strip().endswith(('.', '?', '!', '؟')):
                 return final_answer.strip() + "."
             
             return final_answer.strip()
@@ -145,8 +145,11 @@ with st.form(key='chat_form', clear_on_submit=True):
     submit_button = st.form_submit_button(label=f'{send_label} / {send_label}') 
 
 if submit_button and user_input:
+    # --- Determine if the UI is currently set to Arabic ---
+    is_arabic_ui = (st.session_state.language == "العربية")
+    
     # --- FIND ANSWER LOGIC ---
-    answer = find_answer(user_input, pdf_data, user_lang_is_arabic)
+    answer = find_answer(user_input, pdf_data, is_arabic_ui)
 
     # Handle case where no answer is found
     if not answer:
