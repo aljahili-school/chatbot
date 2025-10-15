@@ -14,7 +14,6 @@ st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="c
 # ------------------ PDF READER ------------------
 def read_pdf(file_path):
     text = ""
-    # Assuming school_data.pdf now contains content in Arabic.
     if not os.path.exists(file_path):
         return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
 
@@ -22,21 +21,19 @@ def read_pdf(file_path):
         with open(file_path, "rb") as f:
             reader = PyPDF2.PdfReader(f)
             for page in reader.pages:
-                # PyPDF2 extracts raw text, which needs careful handling for Arabic.
                 text += page.extract_text() + "\n"
         return text
     except Exception as e:
         return f"Error reading PDF: {str(e)}"
 
-
 # Load your school PDF here
-# *** NOTE: The file 'school_data.pdf' is now assumed to contain ARABIC content. ***
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
 if "Error" in pdf_data and pdf_data.startswith("Error:"):
     st.error(pdf_data)
     st.stop()
+
 
 # ------------------ PAGE HEADER ------------------
 col1, col2 = st.columns([9, 1])
@@ -61,79 +58,82 @@ else:
     user_lang_is_arabic = True
 
 
-# ------------------ FIND ANSWER (SEARCHES ARABIC PDF) ------------------
-def find_answer(question, text, user_is_arabic):
+# ------------------ FIND ANSWER (SEARCHES PDF DATA) ------------------
+def find_answer(question, pdf_text, user_is_arabic):
     try:
         search_query_ar = question.lower()
         
-        # 1. Prepare the Search Query (Must be in Arabic to match the PDF)
+        # 1. Prepare the Search Query (Must be in Arabic to match the facts)
         if not user_is_arabic:
-            # If input is English, translate it to Arabic for searching the Arabic PDF
+            # If input is English, translate it to Arabic for searching
             translator_en_to_ar = GoogleTranslator(source='en', target='ar')
-            # Translate and remove punctuation to handle variations like "social worker?" vs "social worker"
             search_query_ar = translator_en_to_ar.translate(text=question).lower()
         
         # Clean the query (remove most non-Arabic, non-digit characters)
         search_query_ar_cleaned = re.sub(r'[^\u0600-\u06FF\s\d]', '', search_query_ar).strip()
         
-        # 2. Extract and Prepare Sentences for Search
-        # Use the period/full stop (.) as the reliable sentence separator for Arabic text
-        sentences = text.replace('\n', ' ').replace('\r', '').split(".")
+        # 2. CRITICAL CLEANING AND SPLITTING STEP
+        # We split the raw text by the period (.) and then clean each segment
+        raw_facts_list = pdf_text.replace('\n', ' ').replace('\r', '').split(".")
         
-        # Define comprehensive keyword list for scoring
-        # This list includes all roles, names, and grade numbers from the PDF content
-        keywords_pdf = [
-            'مديرة المدرسة', 'أخصائية الصف', 'مريم الشامسي', 'عليا الكويتي', 'معلمة موزة',
-            'عاشر', '10', 'حادي عشر', '11', 'ثاني عشر', '12', 'فاطمة الناصري'
-        ]
+        # Filter and clean the list of facts
+        facts_list = []
+        for fact in raw_facts_list:
+            cleaned_fact = fact.strip()
+            if len(cleaned_fact) > 5: # Ignore very short, likely junk segments
+                facts_list.append(cleaned_fact + '.') # Add period back for cleaner display if needed
 
-        # 3. Iterate and Score using strict presence check
+        
         best_score = -1
-        found_sentence_ar = None
-        query_words = search_query_ar_cleaned.split()
+        found_fact_ar = None
 
-        for sentence in sentences:
-            sentence_ar_cleaned = re.sub(r'[^\u0600-\u06FF\s\d]', '', sentence).strip()
-            if not sentence_ar_cleaned:
-                continue
+        # Define comprehensive keyword mapping
+        required_segments = {
+            'مديرة المدرسة': ['مديرة', 'مدير', 'principal'],
+            'أخصائية الصف الثاني عشر': ['أخصائية', 'الصف الثاني عشر', '12', 'ثاني عشر', 'social worker'],
+            'أخصائية الصف الحادي عشر': ['أخصائية', 'الصف الحادي عشر', '11', 'حادي عشر', 'social worker'],
+            'أخصائية الصف العاشر': ['أخصائية', 'الصف العاشر', '10', 'عاشر', 'social worker'],
+        }
 
+        # 3. Iterate and Score by checking for required segments
+        for fact in facts_list:
             current_score = 0
             
-            # Count how many of the PDF's official keywords appear in the cleaned sentence
-            for kw in keywords_pdf:
-                # Use regex word boundaries to ensure we match whole words or numbers, not just substrings
-                if re.search(r'\b' + re.escape(kw) + r'\b', sentence_ar_cleaned):
-                    current_score += 1
-            
-            # Crucial filtering: The sentence must contain at least one major role keyword (مديرة or أخصائية) 
-            # and it must match at least one word from the user's input.
-            role_match = re.search(r'مديرة|أخصائية', sentence_ar_cleaned)
-            
-            if role_match and current_score > best_score:
-                # To ensure relevance, we must also check if the user's input words are *present* in the sentence.
-                # This prevents giving a random answer if the sentence just happens to contain a high-scoring but irrelevant word.
-                relevance_score = 0
-                for q_word in query_words:
-                    if re.search(re.escape(q_word), sentence_ar_cleaned):
-                        relevance_score += 1
-                
-                # We update the best match if it has a high score AND is relevant to the user's query
-                if relevance_score > 0 and current_score > best_score:
-                    best_score = current_score
-                    found_sentence_ar = sentence.strip()
+            # Clean the fact for robust searching
+            fact_cleaned_for_search = re.sub(r'[^\u0600-\u06FF\s\d]', '', fact).strip()
+
+            # Check for a near-perfect match on the main subject part of the fact
+            fact_subject = fact.split('هي')[0].strip()
+            if re.search(re.escape(fact_subject), search_query_ar_cleaned):
+                current_score = 100 # Perfect match score
+
+            # If not a perfect match, check if this fact is relevant based on segments
+            if current_score < 100:
+                # Find the key segment for this fact (e.g., 'مديرة المدرسة')
+                for segment_key, synonyms in required_segments.items():
+                    if fact.startswith(segment_key):
+                        # Score this fact based on how many synonyms are in the user's query
+                        for syn in synonyms:
+                            if re.search(re.escape(syn), search_query_ar_cleaned):
+                                current_score += 1
+                        break
+
+            # Prioritize the fact with the highest score
+            if current_score > best_score:
+                best_score = current_score
+                found_fact_ar = fact.strip()
 
         # 4. Final Output Translation
-        # Require a minimum score of 1 and a role match (already filtered above)
-        if found_sentence_ar:
+        if found_fact_ar and best_score > 0:
             if user_is_arabic:
-                # Answer is already in Arabic (from the PDF)
-                final_answer = found_sentence_ar
+                # Answer is already in Arabic
+                final_answer = found_fact_ar
             else:
                 # Translate Arabic result back to English
                 translator_ar_to_en = GoogleTranslator(source='ar', target='en')
-                final_answer = translator_ar_to_en.translate(text=found_sentence_ar)
+                final_answer = translator_ar_to_en.translate(text=found_fact_ar)
             
-            # Simple check to ensure punctuation
+            # Ensure punctuation
             if final_answer and not final_answer.strip().endswith(('.', '?', '!', '؟')):
                 return final_answer.strip() + "."
             
