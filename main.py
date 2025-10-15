@@ -44,7 +44,7 @@ with col1:
 
 # Language toggle logic
 if "language" not in st.session_state:
-    st.session_state.language = "العربية" # <--- CHANGED DEFAULT LANGUAGE TO ARABIC
+    st.session_state.language = "العربية" # Default language is Arabic
 
 with col2:
     # Button to switch UI language
@@ -60,12 +60,9 @@ else:
     user_lang_is_arabic = True
 
 
-# ------------------ FIND ANSWER (NEW ARABIC PDF LOGIC) ------------------
+# ------------------ FIND ANSWER (FIXED SENTENCE SPLITTING) ------------------
 def find_answer(question, text, user_is_arabic):
     try:
-        # Determine the language of the final answer (target_lang_code)
-        # It matches the user's input language (which matches the UI state)
-        target_lang_code = 'ar' if user_is_arabic else 'en'
         
         search_query_ar = question.lower()
         
@@ -75,12 +72,11 @@ def find_answer(question, text, user_is_arabic):
             translator_en_to_ar = GoogleTranslator(source='en', target='ar')
             search_query_ar = translator_en_to_ar.translate(text=question).lower()
         
-        # Note: If input is already Arabic, we use the question directly as the search query.
-
+        
         # --- CHATBOT SEARCH LOGIC: SCORING (against Arabic PDF text) ---
-        # Split text into sentences using '. ' as the delimiter (or similar punctuation)
-        # For Arabic, it's safer to just split by newline or common separator
-        sentences = text.replace('\n\n', '@@@').replace('\n', ' ').replace('\r', '').split("@@@")
+        # FIXED SENTENCE SPLITTING: Use the period/full stop (.) as the reliable sentence separator
+        # This prevents PyPDF2's poor Arabic text extraction from causing everything to be one block.
+        sentences = text.replace('\n', ' ').replace('\r', '').split(".") 
 
         # Prepare keywords: minimal filtering for robustness in Arabic
         keywords = [word for word in search_query_ar.split() if len(word) > 1]
@@ -91,6 +87,8 @@ def find_answer(question, text, user_is_arabic):
         # Iterate through all sentences to find the one with the highest keyword overlap (score)
         for sentence in sentences:
             sentence_lower = sentence.lower()
+            # Handle the case where the text might contain lines that don't end in a period
+            # We look for the keyword overlap score
             current_score = sum(1 for keyword in keywords if keyword in sentence_lower)
             
             # Update the best match if the current sentence has a higher score
