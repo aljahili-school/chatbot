@@ -58,35 +58,48 @@ else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
 
 
-# ------------------ FIND ANSWER (FINAL, VERIFIED TRANSLATION LOGIC) ------------------
+# ------------------ FIND ANSWER (FIXED LOGIC) ------------------
 def find_answer(question, text):
     try:
         # 1. Translate the input question to English for searching the PDF
         input_translator = GoogleTranslator(source='auto', target='en')
-        search_question = input_translator.translate(text=question)
+        search_question = input_translator.translate(text=question).lower()
 
         # 2. Determine the final answer language based on the Streamlit toggle
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
-        # --- CHATBOT SEARCH LOGIC ---
-        search_question = search_question.lower()
+        # --- CHATBOT SEARCH LOGIC: FIXED TO USE SCORING ---
         # Split text into sentences using '. ' as the delimiter
         sentences = text.replace('\n', ' ').replace('\r', '').split(". ")
 
-        # Simplified keyword extraction
+        # Simplified keyword extraction: keeping important nouns and the number '10'
         stop_words = ["what", "is", "the", "are", "of", "a", "an", "how", "when", "where", "me", "about", "tell", "who", "for", "i'm", "i", "do", "you"]
-        keywords = [word for word in search_question.split() if word not in stop_words and len(word) > 2]
-
-        # Simple matching: Return the first English sentence that contains one or more English keywords
+        # Include numbers and single letters if they are part of the grade (e.g., '10', '9')
+        keywords = [word for word in search_question.split() if word not in stop_words and len(word) > 1]
+        
+        # Variables for best match
+        best_score = -1
         found_sentence_en = None
-        for sentence in sentences:
-            if any(keyword in sentence.lower() for keyword in keywords):
-                # Ensure the sentence ends with a period before proceeding
-                found_sentence_en = sentence.strip() + "."
-                break
 
-        if found_sentence_en:
+        # Iterate through all sentences to find the one with the highest keyword overlap (score)
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            current_score = 0
+            
+            # Calculate score: count how many keywords are present
+            for keyword in keywords:
+                if keyword in sentence_lower:
+                    current_score += 1
+            
+            # Update the best match if the current sentence has a higher score
+            if current_score > best_score:
+                best_score = current_score
+                found_sentence_en = sentence.strip() + "."
+        
+        
+        # Only return an answer if a good match (score of 2 or more) was found
+        if best_score >= 2:
             # 3. Translate the found English answer back to the user's language
             if target_lang_code != 'en':
                 # Initialize translator for output: source English, target user's language
@@ -97,7 +110,7 @@ def find_answer(question, text):
 
             return final_answer
 
-        return None  # No answer found
+        return None  # No answer found with a sufficient score
 
     except Exception as e:
         # If translation fails, provide a language-appropriate error message
