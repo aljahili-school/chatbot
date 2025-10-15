@@ -1,0 +1,7 @@
+# Ignore configuration and secret files
+.env
+
+# Standard Python and IDE ignores usually found here:
+__pycache__/
+*.pyc
+.DS_Store
