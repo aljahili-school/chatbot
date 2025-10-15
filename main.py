@@ -17,6 +17,7 @@ def read_pdf(file_path):
     # In Streamlit Cloud, the file path is just the name if it's in the root of the repo
     # *** IMPORTANT: Change the file name here if you renamed your PDF to fix caching! ***
     if not os.path.exists(file_path):
+        # NOTE: This error message is essential for debugging file path issues.
         return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
 
     try:
@@ -26,6 +27,7 @@ def read_pdf(file_path):
                 text += page.extract_text() + "\n"
         return text
     except Exception as e:
+        # NOTE: If PyPDF2 fails to read the content for any reason
         return f"Error reading PDF: {str(e)}"
 
 
@@ -45,9 +47,11 @@ with col1:
 
 # Language toggle logic
 if "language" not in st.session_state:
-    st.session_state.language = "English"
+    # --- CHANGE MADE HERE: Default language set to Arabic ---
+    st.session_state.language = "العربية" 
 
 with col2:
+    # Use a Unicode character for the Arabic button label for better display
     if st.button("🌐", key="lang_button"):
         st.session_state.language = "العربية" if st.session_state.language == "English" else "English"
 
@@ -83,7 +87,9 @@ def find_answer(question, text):
         for sentence in sentences:
             if any(keyword in sentence.lower() for keyword in keywords):
                 # Ensure the sentence ends with a period before proceeding
-                found_sentence_en = sentence.strip() + "."
+                found_sentence_en = sentence.strip()
+                if not found_sentence_en.endswith('.'):
+                    found_sentence_en += "."
                 break
 
         if found_sentence_en:
@@ -104,6 +110,7 @@ def find_answer(question, text):
         if st.session_state.language == 'العربية':
             return "عذراً، حدث خطأ في الترجمة. يرجى المحاولة مرة أخرى."
         else:
+            # Using str(e) is helpful for debugging locally
             return f"Translation Error: Could not process the request."
 
 
@@ -111,7 +118,7 @@ def find_answer(question, text):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- Dynamic Prompt Variable ---
+# --- Dynamic Prompt Variables (Defined before use) ---
 if st.session_state.language == "English":
     input_prompt = "Ask me something about the school:"
     send_label = 'Send'
@@ -127,7 +134,8 @@ with st.form(key='chat_form', clear_on_submit=True):
         placeholder="e.g., What are the school hours?" if st.session_state.language == "English" else "مثل: ما هي ساعات الدوام المدرسي؟"
     )
 
-    submit_button = st.form_submit_button(label=f'{send_label} / {send_label}') 
+    # NOTE: The label is fixed to show Arabic/English correctly based on the session state
+    submit_button = st.form_submit_button(label=send_label) 
 
 if submit_button and user_input:
     # --- FIND ANSWER LOGIC ---
@@ -150,16 +158,13 @@ if submit_button and user_input:
 # Display messages in the order they were inserted (newest at the top)
 for sender, msg in st.session_state.messages: 
     color = "#eaf2fd" if sender == "🧍‍♀️ You" else "#f0f0f0"
+    # Added direction logic for Arabic text
+    direction = "rtl" if st.session_state.language == 'العربية' and sender == '🤖 Waha' else "ltr"
+    
     st.markdown(
-        f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word;'><b>{sender}:</b> {msg}</div>",
+        f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word; text-align:{'right' if direction == 'rtl' else 'left'}; direction:{direction};'><b>{sender}:</b> {msg}</div>",
         unsafe_allow_html=True)
 
 # ------------------ FOOTER ------------------
 
 st.markdown("<hr><center>© 2025 Waha School Chatbot | Created by Fatima Al Naseri</center>", unsafe_allow_html=True)
-
-
-streamlit
-PyPDF2
-deep-translator  # New library to use for translation
-
