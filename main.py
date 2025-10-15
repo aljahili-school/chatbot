@@ -1,4 +1,4 @@
-# 🎓 Waha School Chatbot (with PDF data)
+# 🎓 Waha School Chatbot (with Arabic PDF data)
 # Created by Fatima Al Naseri
 # Run using: streamlit run main.py
 
@@ -14,8 +14,7 @@ st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="c
 # ------------------ PDF READER ------------------
 def read_pdf(file_path):
     text = ""
-    # In Streamlit Cloud, the file path is just the name if it's in the root of the repo
-    # *** IMPORTANT: Change the file name here if you renamed your PDF to fix caching! ***
+    # Assuming school_data.pdf now contains content in Arabic.
     if not os.path.exists(file_path):
         return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
 
@@ -30,7 +29,7 @@ def read_pdf(file_path):
 
 
 # Load your school PDF here
-# *** IMPORTANT: Use the correct, clean PDF file name here ***
+# *** NOTE: The file 'school_data.pdf' MUST now contain Arabic content. ***
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
@@ -48,76 +47,81 @@ if "language" not in st.session_state:
     st.session_state.language = "English"
 
 with col2:
+    # Button to switch UI language
     if st.button("🌐", key="lang_button"):
         st.session_state.language = "العربية" if st.session_state.language == "English" else "English"
 
 # ------------------ INTRO ------------------
 if st.session_state.language == "English":
     st.write("Welcome! Ask me about the school. Type below 👇")
+    user_lang_is_arabic = False
 else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
+    user_lang_is_arabic = True
 
 
-# ------------------ FIND ANSWER (FIXED LOGIC) ------------------
-def find_answer(question, text):
+# ------------------ FIND ANSWER (NEW ARABIC PDF LOGIC) ------------------
+def find_answer(question, text, user_is_arabic):
     try:
-        # 1. Translate the input question to English for searching the PDF
-        input_translator = GoogleTranslator(source='auto', target='en')
-        search_question = input_translator.translate(text=question).lower()
-
-        # 2. Determine the final answer language based on the Streamlit toggle
-        target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
-
-
-        # --- CHATBOT SEARCH LOGIC: FIXED TO USE SCORING ---
-        # Split text into sentences using '. ' as the delimiter
-        sentences = text.replace('\n', ' ').replace('\r', '').split(". ")
-
-        # Simplified keyword extraction: keeping important nouns and the number '10'
-        stop_words = ["what", "is", "the", "are", "of", "a", "an", "how", "when", "where", "me", "about", "tell", "who", "for", "i'm", "i", "do", "you"]
-        # Include numbers and single letters if they are part of the grade (e.g., '10', '9')
-        keywords = [word for word in search_question.split() if word not in stop_words and len(word) > 1]
+        # Determine the language of the final answer (target_lang_code)
+        # It matches the user's input language (which matches the UI state)
+        target_lang_code = 'ar' if user_is_arabic else 'en'
         
-        # Variables for best match
+        search_query_ar = question.lower()
+        
+        # 1. Prepare the Search Query (Must be in Arabic to match the PDF)
+        if not user_is_arabic:
+            # If input is English, translate it to Arabic for searching the Arabic PDF
+            translator_en_to_ar = GoogleTranslator(source='en', target='ar')
+            search_query_ar = translator_en_to_ar.translate(text=question).lower()
+        
+        # Note: If input is already Arabic, we use the question directly as the search query.
+
+        # --- CHATBOT SEARCH LOGIC: SCORING (against Arabic PDF text) ---
+        # Split text into sentences using '. ' as the delimiter (or similar punctuation)
+        # For Arabic, it's safer to just split by newline or common separator
+        sentences = text.replace('\n\n', '@@@').replace('\n', ' ').replace('\r', '').split("@@@")
+
+        # Prepare keywords: minimal filtering for robustness in Arabic
+        keywords = [word for word in search_query_ar.split() if len(word) > 1]
+
         best_score = -1
-        found_sentence_en = None
+        found_sentence_ar = None
 
         # Iterate through all sentences to find the one with the highest keyword overlap (score)
         for sentence in sentences:
             sentence_lower = sentence.lower()
-            current_score = 0
-            
-            # Calculate score: count how many keywords are present
-            for keyword in keywords:
-                if keyword in sentence_lower:
-                    current_score += 1
+            current_score = sum(1 for keyword in keywords if keyword in sentence_lower)
             
             # Update the best match if the current sentence has a higher score
-            if current_score > best_score:
+            if current_score > best_score and sentence.strip():
                 best_score = current_score
-                found_sentence_en = sentence.strip() + "."
-        
-        
-        # Only return an answer if a good match (score of 2 or more) was found
+                found_sentence_ar = sentence.strip()
+
+        # 3. Final Output Translation
         if best_score >= 2:
-            # 3. Translate the found English answer back to the user's language
-            if target_lang_code != 'en':
-                # Initialize translator for output: source English, target user's language
-                output_translator = GoogleTranslator(source='en', target=target_lang_code)
-                final_answer = output_translator.translate(text=found_sentence_en)
+            if user_is_arabic:
+                # Answer is already in Arabic (from the PDF)
+                final_answer = found_sentence_ar
             else:
-                final_answer = found_sentence_en
+                # Translate Arabic result back to English
+                translator_ar_to_en = GoogleTranslator(source='ar', target='en')
+                final_answer = translator_ar_to_en.translate(text=found_sentence_ar)
+            
+            # Simple check to ensure punctuation
+            if final_answer and not final_answer.strip().endswith(('.', '?', '!')):
+                return final_answer.strip() + "."
+            
+            return final_answer.strip()
 
-            return final_answer
-
-        return None  # No answer found with a sufficient score
+        return None # No answer found
 
     except Exception as e:
-        # If translation fails, provide a language-appropriate error message
-        if st.session_state.language == 'العربية':
-            return "عذراً، حدث خطأ في الترجمة. يرجى المحاولة مرة أخرى."
+        # Provide language-appropriate error message
+        if user_is_arabic:
+            return "عذراً، حدث خطأ في معالجة الطلب. يرجى المحاولة مرة أخرى."
         else:
-            return f"Translation Error: Could not process the request."
+            return f"Error: Could not process the request."
 
 
 # ------------------ CHAT ------------------
@@ -144,12 +148,12 @@ with st.form(key='chat_form', clear_on_submit=True):
 
 if submit_button and user_input:
     # --- FIND ANSWER LOGIC ---
-    answer = find_answer(user_input, pdf_data)
+    answer = find_answer(user_input, pdf_data, user_lang_is_arabic)
 
-    # Handle case where no answer is found OR a translation error occurs
-    if not answer or answer.startswith("عذراً، حدث خطأ") or answer.startswith("Translation Error"):
+    # Handle case where no answer is found
+    if not answer:
         if st.session_state.language == "English":
-            answer = "I'm sorry, I couldn't find that in the school information."
+            answer = "I'm sorry, I couldn't find that information in the school's document."
         else:
             answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
 
