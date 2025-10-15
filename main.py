@@ -1,16 +1,28 @@
-⚙️ AI-Powered Version (using OpenAI API)
-Here’s the full Python code you can replace your current one with:
 # 🎓 Waha School Chatbot (AI-Powered, Arabic + English)
 # Run using: streamlit run main.py
 
 import streamlit as st
 import PyPDF2
-import os
+import os # <-- Necessary for reading environment variables
 from deep_translator import GoogleTranslator
 from openai import OpenAI
+from dotenv import load_dotenv # <-- NEW IMPORT: To load the .env file
 
-# Initialize the OpenAI client
-client = OpenAI(api_key="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")
+# Load environment variables (like OPENAI_API_KEY) from the local .env file
+load_dotenv() 
+
+# ------------------ API KEY SETUP (SECURELY) ------------------
+
+# 1. Get the API key from the environment variable
+api_key = os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    # 2. Halt execution if the key is missing (secure fail)
+    st.error("⚠️ FATAL ERROR: OpenAI API key (OPENAI_API_KEY) not found. Please ensure your .env file is correct.")
+    st.stop()
+    
+# 3. Initialize the OpenAI client using the securely retrieved key
+client = OpenAI(api_key=api_key)
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
