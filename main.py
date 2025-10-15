@@ -6,6 +6,7 @@ import streamlit as st
 import PyPDF2
 import os
 from deep_translator import GoogleTranslator
+import re # <-- New import for better search
 
 # ------------------ PAGE SETUP ------------------
 st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="centered")
@@ -14,25 +15,21 @@ st.set_page_config(page_title="Waha School Chatbot", page_icon="🎓", layout="c
 # ------------------ PDF READER ------------------
 def read_pdf(file_path):
     text = ""
-    # In Streamlit Cloud, the file path is just the name if it's in the root of the repo
-    # *** IMPORTANT: Change the file name here if you renamed your PDF to fix caching! ***
     if not os.path.exists(file_path):
-        # NOTE: This error message is essential for debugging file path issues.
         return f"Error: PDF file '{file_path}' not found. Make sure it's in the main folder."
 
     try:
         with open(file_path, "rb") as f:
             reader = PyPDF2.PdfReader(f)
             for page in reader.pages:
+                # Extracting text might result in poor formatting, but we handle it in find_answer
                 text += page.extract_text() + "\n"
         return text
     except Exception as e:
-        # NOTE: If PyPDF2 fails to read the content for any reason
         return f"Error reading PDF: {str(e)}"
 
 
 # Load your school PDF here
-# *** IMPORTANT: Use the correct, clean PDF file name here ***
 pdf_data = read_pdf("school_data.pdf")
 
 # Check if the PDF loaded successfully
@@ -47,11 +44,9 @@ with col1:
 
 # Language toggle logic
 if "language" not in st.session_state:
-    # --- CHANGE MADE HERE: Default language set to Arabic ---
-    st.session_state.language = "العربية" 
+    st.session_state.language = "العربية" # Default to Arabic
 
 with col2:
-    # Use a Unicode character for the Arabic button label for better display
     if st.button("🌐", key="lang_button"):
         st.session_state.language = "العربية" if st.session_state.language == "English" else "English"
 
@@ -62,63 +57,79 @@ else:
     st.write("مرحباً! اسألني عن المدرسة. اكتب سؤالك بالأسفل 👇")
 
 
-# ------------------ FIND ANSWER (FINAL, VERIFIED TRANSLATION LOGIC) ------------------
+# ------------------ FIND ANSWER (ENHANCED SEARCH LOGIC) ------------------
 def find_answer(question, text):
     try:
         # 1. Translate the input question to English for searching the PDF
         input_translator = GoogleTranslator(source='auto', target='en')
         search_question = input_translator.translate(text=question)
 
-        # 2. Determine the final answer language based on the Streamlit toggle
+        # 2. Determine the final answer language
         target_lang_code = 'ar' if st.session_state.language == 'العربية' else 'en'
 
 
         # --- CHATBOT SEARCH LOGIC ---
         search_question = search_question.lower()
-        # Split text into sentences using '. ' as the delimiter
-        sentences = text.replace('\n', ' ').replace('\r', '').split(". ")
+        
+        # Split text into lines/sections using newline characters
+        lines = text.split('\n') 
 
-        # Simplified keyword extraction
-        stop_words = ["what", "is", "the", "are", "of", "a", "an", "how", "when", "where", "me", "about", "tell", "who", "for", "i'm", "i", "do", "you"]
+        # Simplified keyword extraction (prioritize "name", "school", "hours", "contact")
+        stop_words = ["what", "is", "the", "are", "of", "a", "an", "how", "when", "where", "me", "about", "tell", "who", "for", "i'm", "i", "do", "you", "and"]
         keywords = [word for word in search_question.split() if word not in stop_words and len(word) > 2]
 
-        # Simple matching: Return the first English sentence that contains one or more English keywords
-        found_sentence_en = None
-        for sentence in sentences:
-            if any(keyword in sentence.lower() for keyword in keywords):
-                # Ensure the sentence ends with a period before proceeding
-                found_sentence_en = sentence.strip()
-                if not found_sentence_en.endswith('.'):
-                    found_sentence_en += "."
-                break
+        # Add proper nouns/search terms for high-value queries
+        if 'name' in search_question and 'school' in search_question:
+             keywords.append('مدرسة') # Search for the Arabic word for school in the extracted text
+             keywords.append('اسم')   # Search for the Arabic word for name in the extracted text
 
-        if found_sentence_en:
-            # 3. Translate the found English answer back to the user's language
+        found_text_en = None
+        
+        # Loop through keywords to find the best match in the extracted lines
+        for keyword in set(keywords):
+            # Check for a match in the original PDF text
+            for line in lines:
+                # We check against the original line (which is mostly Arabic in your case)
+                if keyword.lower() in line.lower() or keyword.strip() in line.lower():
+                    # Prioritize exact lines for facts like 'school name'
+                    found_text_en = line.strip()
+                    break
+            if found_text_en:
+                break # Found a match, stop searching keywords
+
+        
+        if found_text_en:
+            # 3. Translate the found (likely Arabic) text to English first for a clean answer, 
+            #    THEN translate back to the target language (Arabic or English).
+            
+            # Use 'auto' source language since the extracted text might be a mix of English/Arabic/garbage
+            translation_to_english = GoogleTranslator(source='auto', target='en')
+            # The found line might be Arabic, so translate it to English first
+            found_text_en_clean = translation_to_english.translate(text=found_text_en)
+
+            # 4. Translate the clean English text back to the user's target language
             if target_lang_code != 'en':
-                # Initialize translator for output: source English, target user's language
                 output_translator = GoogleTranslator(source='en', target=target_lang_code)
-                final_answer = output_translator.translate(text=found_sentence_en)
+                final_answer = output_translator.translate(text=found_text_en_clean)
             else:
-                final_answer = found_sentence_en
-
+                final_answer = found_text_en_clean
+            
             return final_answer
 
-        return None  # No answer found
+        return None # No answer found
 
     except Exception as e:
-        # If translation fails, provide a language-appropriate error message
         if st.session_state.language == 'العربية':
-            return "عذراً، حدث خطأ في الترجمة. يرجى المحاولة مرة أخرى."
+            return "عذراً، حدث خطأ في الترجمة أو في عملية البحث."
         else:
-            # Using str(e) is helpful for debugging locally
-            return f"Translation Error: Could not process the request."
+            return f"Search/Translation Error: Could not process the request."
 
 
 # ------------------ CHAT ------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- Dynamic Prompt Variables (Defined before use) ---
+# --- Dynamic Prompt Variables ---
 if st.session_state.language == "English":
     input_prompt = "Ask me something about the school:"
     send_label = 'Send'
@@ -126,7 +137,7 @@ else:
     input_prompt = "اسألني عن المدرسة:"
     send_label = 'إرسال'
 
-# Input and Submission are placed inside a form to clear the input field after submission
+# Input and Submission
 with st.form(key='chat_form', clear_on_submit=True):
     user_input = st.text_input(
         input_prompt, 
@@ -134,7 +145,6 @@ with st.form(key='chat_form', clear_on_submit=True):
         placeholder="e.g., What are the school hours?" if st.session_state.language == "English" else "مثل: ما هي ساعات الدوام المدرسي؟"
     )
 
-    # NOTE: The label is fixed to show Arabic/English correctly based on the session state
     submit_button = st.form_submit_button(label=send_label) 
 
 if submit_button and user_input:
@@ -142,14 +152,13 @@ if submit_button and user_input:
     answer = find_answer(user_input, pdf_data)
 
     # Handle case where no answer is found OR a translation error occurs
-    if not answer or answer.startswith("عذراً، حدث خطأ") or answer.startswith("Translation Error"):
+    if not answer or answer.startswith("عذراً، حدث خطأ") or answer.startswith("Search/Translation Error"):
         if st.session_state.language == "English":
             answer = "I'm sorry, I couldn't find that in the school information."
         else:
             answer = "عذراً، لم أجد هذه المعلومة في ملف المدرسة."
 
     # --- SAVE TO HISTORY ---
-    # Insert the newest interaction to the front of the list
     st.session_state.messages.insert(0, ("🤖 Waha", answer))
     st.session_state.messages.insert(0, ("🧍‍♀️ You", user_input))
 
@@ -158,11 +167,14 @@ if submit_button and user_input:
 # Display messages in the order they were inserted (newest at the top)
 for sender, msg in st.session_state.messages: 
     color = "#eaf2fd" if sender == "🧍‍♀️ You" else "#f0f0f0"
-    # Added direction logic for Arabic text
-    direction = "rtl" if st.session_state.language == 'العربية' and sender == '🤖 Waha' else "ltr"
+    
+    # Determine text direction for Arabic
+    is_arabic_response = st.session_state.language == 'العربية' and sender == '🤖 Waha'
+    direction = "rtl" if is_arabic_response else "ltr"
+    text_align = "right" if is_arabic_response else "left"
     
     st.markdown(
-        f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word; text-align:{'right' if direction == 'rtl' else 'left'}; direction:{direction};'><b>{sender}:</b> {msg}</div>",
+        f"<div style='background-color:{color};padding:10px;border-radius:10px;margin:5px 0; word-break: break-word; text-align:{text_align}; direction:{direction};'><b>{sender}:</b> {msg}</div>",
         unsafe_allow_html=True)
 
 # ------------------ FOOTER ------------------
