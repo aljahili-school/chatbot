@@ -4,3 +4,4 @@ deep-translator  # New library to use for translation
 pandas
 python-dotenv
 
+openai
