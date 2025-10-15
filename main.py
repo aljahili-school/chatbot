@@ -97,6 +97,10 @@ def find_answer(question, text, user_is_arabic):
             'حادي': ['حادي عشر', '11'], 
             'ثاني': ['ثاني عشر', '12'],
             'الثاني': ['ثاني عشر', '12'],
+            # Added common number/grade mappings for robustness
+            '١٠': ['عاشر', '10'], 
+            '١١': ['حادي عشر', '11'], 
+            '١٢': ['ثاني عشر', '12'],
         }
 
         # Break down the cleaned query into core terms
@@ -128,7 +132,8 @@ def find_answer(question, text, user_is_arabic):
                     mapped_terms = keyword_map.get(term, [term])
                     
                     for mapped_term in mapped_terms:
-                        if re.search(re.escape(mapped_term), sentence_ar_cleaned):
+                        # Use word boundaries (\b) for a more precise match on the mapped term (like a specific number)
+                        if re.search(r'\b' + re.escape(mapped_term) + r'\b', sentence_ar_cleaned):
                             current_score += 1 # Add score for finding the grade or name
                             break # Move to next query term
 
@@ -138,8 +143,8 @@ def find_answer(question, text, user_is_arabic):
                 found_sentence_ar = sentence.strip()
 
         # 4. Final Output Translation
-        # Require a minimum score of 2 (Subject + Grade/Name)
-        if best_score >= 2:
+        # CHANGED: Require a minimum score of 1 (down from 2) for more permissive matching on distinct single-line facts.
+        if best_score >= 1:
             if user_is_arabic:
                 # Answer is already in Arabic (from the PDF)
                 final_answer = found_sentence_ar
